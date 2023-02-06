@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://unpkg.com/tonweb@latest/dist/tonweb.js"></script>
+    <script src="https://unpkg.com/qrcode@1.5.1/build/qrcode.js"></script>
+
+    <style>
+      body {
+        padding: 8px 24px;
+
+        font-family: Consolas, monospace;
+      }
+      textarea {
+        border: #0088CC 1px solid;
+        margin-bottom: 16px;
+        padding: 6px;
+
+        resize: vertical;
+        width: calc(100% - 12px); height: 60px;
+      }
+      .notifications {
+        border-left: #0088CC 1px solid;
+        margin-bottom: 16px;
+        padding: 8px;
+        word-break: break-all;
+
+        width: 100%; min-height: 30px;
+      }
+      #qr {
+        margin: 24px;
+        border: #232328 1px solid;
+        width: 360px; height: 360px;
+      }
+      canvas {
+        width: 100% !important; height: 100% !important;
+      }
+      header {
+        background: linear-gradient(270deg, #6AAEFF, #B2D4FC);
+        margin-bottom: 16px; padding: 12px 24px;
+        color: #232328; font-weight: 800;
+        font-size: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+        TON contract deployer
+      | Tools ring <a href="https://ratingers.pythonanywhere.com/ratelance/">[Ratelance]</a>
+                   <a href="https://ratingers.pythonanywhere.com/tx-explorer/">[ChainArrowViewer]</a>
+      | EQCyoez1VF4HbNNq5Rbqfr3zKuoAjKorhK-YZr7LIIiVrSD7</header
+    >
+    <div class="notifications">
+      Empty cell BOC: te6ccsEBAQEAAgAAAAC1U5ck
+    </div>
+    <textarea id="code" placeholder="Contract code: b64/hex BOC"></textarea>
+    <textarea id="data" placeholder="Contract data: b64/hex BOC"></textarea>
+    <div class="notifications" id="log"></div>
+    <div id="qr"><canvas></canvas></div>
+
+    <script>
+      const $ = document.querySelector.bind(document);
+
+      const code_field = $('#code');
+      const data_field = $('#data');
+      const notf_field = $('#log.notifications');
+      const canvas = $('#qr>canvas');
+
+      function state_init(code, data) {
+        let b = new TonWeb.boc.Cell();
+        b.bits.writeUint(6, 5);
+        b.refs.push(code);
+        b.refs.push(data);
+        return b;
+      }
+
+      function to_base64(bytes) {
+        return TonWeb.utils.bytesToBase64(bytes).replaceAll('+', '-').replaceAll('/', '_');
+      }
+
+      async function unsigned_tx_request_deploy(addr, state_init) {
+        let boc = await state_init.toBoc();
+        return JSON.stringify({
+          version: '0',
+          body: {
+            type: 'deploy',
+            expires_sec: Math.ceil(new Date() / 1000 + 86400),
+            response_options: {broadcast: true},
+            params: {
+              address: addr,
+              stateInitHex: TonWeb.utils.bytesToHex(boc),
+              amount: '0.050000000'
+            }
+          }
+        });
+      }
+
+      async function unsigned_tx_request(addr, state_init) {
+        let boc = await state_init.toBoc();
+        return JSON.stringify({
+          version: '0',
+          body: {
+            type: 'sign-raw-payload',
+            expires_sec: Math.ceil(new Date() / 1000 + 86400),
+            response_options: {broadcast: true},
+            params: {
+              messages: [{
+                address: addr,
+                stateInit: TonWeb.utils.bytesToBase64(boc),
+                amount: '90000000'
+              }]
+            }
+          }
+        });
+      }
+
+      function boc_to_cell(text) {
+        let bytes = null;
+
+        try {
+          bytes = TonWeb.utils.hexToBytes(text);
+        } catch (e) {
+          try {
+            bytes = TonWeb.utils.base64ToBytes(text);
+          } catch (e) {
+            throw new Error('Text is neither hex nor base64');
+          }
+        }
+
+        return TonWeb.boc.Cell.oneFromBoc(bytes);
+      }
+
+      async function update() {
+        let code_cell = null;
+        let data_cell = null;
+
+        try {
+          code_cell = boc_to_cell(code_field.value);
+        } catch (e) {
+          notf_field.innerText = 'Invalid code cell';
+          return;
+        }
+
+        try {
+          data_cell = boc_to_cell(data_field.value);
+        } catch (e) {
+          notf_field.innerText = 'Invalid data cell';
+          return;
+        }
+
+        if (code_cell.beginParse().loadUint(16).toJSON() !== 'ff00') {
+          notf_field.innerText = 'Code: possibly invalid, SETCP 0 is missing';
+        } else {
+          notf_field.innerText = 'Code: looks valid';
+        }
+
+        let init_cell = state_init(code_cell, data_cell);
+        let init_hash = TonWeb.utils.bytesToHex(await init_cell.hash());
+        let addr = (new TonWeb.Address('0:' + init_hash)).toString(true, true, true);
+
+        notf_field.innerText += '\nGenerated address: ' + addr;
+
+        let ad_cell = new TonWeb.boc.Cell();
+        ad_cell.bits.writeUint(0, 32);
+        ad_cell.bits.writeString('Deploy via ratingers.pythonanywhere.com/deployer/');
+
+        let link = 'ton://transfer/' + addr + '/?amount=90000000'
+                                            + '&bin=' + to_base64(await ad_cell.toBoc())
+                                            + '&init=' + to_base64(await init_cell.toBoc());
+        notf_field.innerText += '\nTransfer link: ';
+        notf_field.innerHTML += '<a href="' + link + '">' + link + '</a>';
+
+        if (link.length >= 1024) {
+          let stored_shortened = localStorage.getItem('short:' + addr);
+          if (!stored_shortened) {
+            let shorten_rq = await fetch('https://jsonblob.com/api/jsonBlob', {
+              method: 'POST',
+              body: await unsigned_tx_request(addr, init_cell),
+              headers: {'Content-Type': 'application/json'}
+            });
+            let nonwrapped_link = shorten_rq.headers.get('Location').slice('http://'.length);
+            link = 'https://app.tonkeeper.com/v1/txrequest-url/' + nonwrapped_link;
+
+            localStorage.setItem('short:' + addr, link);
+          } else {
+            link = stored_shortened;
+          }
+
+          notf_field.innerHTML += '<br>Shortened link: <a href="' + link + '">' + link + '</a>';
+        }
+
+        QRCode.toCanvas(canvas, link);
+      }
+
+      update();
+      code_field.oninput = update;
+      data_field.oninput = update;
+    </script>
+  </body>
+</html>
