@@ -1,5 +1,6 @@
 <script>
   import TonWeb from '../node_modules/tonweb/dist/tonweb.js';
+  import {getHttpEndpoint} from '@orbs-network/ton-access';
 
   function boc_to_cell(text) {
     if (!text) return null;
@@ -18,6 +19,26 @@
     
     return TonWeb.boc.Cell.oneFromBoc(bytes);
   }
+
+  async function updateDataFromContract(addr) {
+    if (!addr) return;
+
+    const endpoint = await getHttpEndpoint();
+    const url = endpoint.replace('jsonRPC', '') + 'getAddressInformation?address=' + addr;
+    const info = await (await fetch(url)).json();
+    const loaded_data = info.result?.data;
+    if (loaded_data) data_text = loaded_data;
+  }
+
+async function updateCodeFromContract(addr) {
+  if (!addr) return;
+
+  const endpoint = await getHttpEndpoint();
+  const url = endpoint.replace('jsonRPC', '') + 'getAddressInformation?address=' + addr;
+  const info = await (await fetch(url)).json();
+  const loaded_code = info.result?.code;
+  if (loaded_code) code_text = loaded_code;
+}
 
   const default_contract_code = {
     'Empty cell': '',
@@ -55,23 +76,35 @@
     margin-right: 16px;
     min-height: 160px;
   }
+  .take-line {
+    flex-grow: 1;
+  }
+  button {
+    padding: 10px;
+  }
 </style>
 
 <div id="code">
   <textarea bind:value={code_text} placeholder='Contract code BOC'></textarea>
   <div>
-    {#each Object.entries(default_contract_code) as [display, boc]}
-    <button on:click={() => {code_text = boc;}}>{display}</button>
-    {/each}
-    <span>{code_error || 'Code BOC parsed successfully'}</span>
+    <div class="take-line">
+      {#each Object.entries(default_contract_code) as [display, boc]}
+      <button on:click={() => {code_text = boc;}}>{display}</button>
+      {/each}
+      <button on:click={() => {updateCodeFromContract(prompt('Contract:'));}}>Import</button>
+    </div>
+    <p>{code_error || 'Code BOC parsed successfully'}</p>
   </div>
 </div>
 <div id="data">
   <textarea bind:value={data_text} placeholder='Contract data BOC'></textarea>
   <div>
-    {#each Object.entries(default_contract_data) as [display, boc]}
-    <button on:click={() => {data_text = boc;}}>{display}</button>
-    {/each}
-    <span>{data_error || 'Data BOC parsed successfully'}</span>
+    <div class="take-line">
+      {#each Object.entries(default_contract_data) as [display, boc]}
+      <button on:click={() => {data_text = boc;}}>{display}</button>
+      {/each}
+      <button on:click={() => {updateDataFromContract(prompt('Contract:'));}}>Import</button>
+    </div>
+    <p>{data_error || 'Data BOC parsed successfully'}</p>
   </div>
 </div>
