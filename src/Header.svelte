@@ -60,11 +60,7 @@
     <span>{is_masterchain ? 'masterchain (-1)' : 'basechain (0)'}</span>
   </button>
   <div class="rounded">
-    <span>Tools ring:</span>&nbsp;
-    <a href="https://ratingers.pythonanywhere.com/ratelance/">[Ratelance]</a>&nbsp;
-    <a href="https://ratingers.pythonanywhere.com/tx-explorer/">[ChainArrowViewer]</a>
-  </div>
-  <div class="rounded warn-border">
-    <a href="ton://transfer/EQCyoez1VF4HbNNq5Rbqfr3zKuoAjKorhK-YZr7LIIiVrSD7">EQCyoez1VF4HbNNq5Rbqfr3zKuoAjKorhK-YZr7LIIiVrSD7</a>
+    <a href="https://ratingers.pythonanywhere.com/">Author & other tools</a>&nbsp;
+    <a href="https://github.com/ProgramCrafter/ton-qr-deployer">GitHub</a>
   </div>
 </header>
